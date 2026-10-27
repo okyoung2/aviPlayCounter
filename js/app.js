@@ -25,6 +25,18 @@ function showScreen(name) {
   window.scrollTo(0, 0);
 }
 
+// 목록이 아닌 화면은 항상 기록 한 칸 위에 둔다. 그래서 뒤로 가기는 목록으로 돌아간다.
+function go(name) {
+  if (name === 'library') {
+    if (history.state?.app) history.back(); // popstate 에서 목록을 보여 준다.
+    else showScreen('library');
+    return;
+  }
+  if (history.state?.app) history.replaceState({ app: true }, '');
+  else history.pushState({ app: true }, '');
+  showScreen(name);
+}
+
 let toastTimer = null;
 function toast(lines) {
   const text = [].concat(lines).filter(Boolean).join('\n');
@@ -121,7 +133,7 @@ function openSetup(item) {
   $('setup-name').textContent = item.name;
   $('setup-error').hidden = true;
   renderSetup();
-  showScreen('setup');
+  go('setup');
 }
 
 function chip(label, checked, onclick, ariaLabel) {
@@ -247,8 +259,7 @@ async function startPlayback(item, settings) {
   $('audio-title').hidden = item.kind === 'video';
   $('audio-title').textContent = item.name;
   hideControls();
-  showScreen('player');
-  history.pushState({ screen: 'player' }, '');
+  go('player');
 
   const step = counter.start();
   if (step.lastRound && settings.lastAlert) player.playAlert('last');
@@ -299,7 +310,7 @@ function finish(completed, { silent = false } = {}) {
   $('result-count').textContent = completed ? `${s.counter.target}회 완료` : `${s.counter.completed}회 재생`;
   $('result-time').textContent = `걸린 시간 ${formatElapsed(s.stopwatch.elapsedMs())}`;
   $('result-name').textContent = s.item.name;
-  showScreen('result');
+  go('result');
 }
 
 // ---- 시작 ----
@@ -311,7 +322,7 @@ function bindEvents() {
     e.target.value = '';
     addFiles(files);
   });
-  $('back-btn').addEventListener('click', () => showScreen('library'));
+  $('back-btn').addEventListener('click', () => go('library'));
   $('custom-count').addEventListener('input', (e) => {
     draft.customText = e.target.value.trim();
     draft.count = parseCustomCount(draft.customText);
@@ -338,12 +349,17 @@ function bindEvents() {
   $('again-btn').addEventListener('click', () => {
     if (lastSession) startPlayback(lastSession.item, lastSession.settings);
   });
-  $('home-btn').addEventListener('click', () => showScreen('library'));
+  $('home-btn').addEventListener('click', () => go('library'));
 
-  // 재생 중 뒤로 가기는 정지와 같다. 결과 화면에서 뒤로 가면 목록으로.
+  // 재생 중 뒤로 가기(가장자리 밀기 실수 포함)는 정지하지 않는다. 정지는 ■ 정지 버튼으로만.
   window.addEventListener('popstate', () => {
-    if (session) finish(false);
-    else if (!$('screen-result').hidden) showScreen('library');
+    if (session) {
+      history.pushState({ app: true }, '');
+      showControls();
+      toast('끝내려면 ■ 정지를 눌러 주세요');
+      return;
+    }
+    showScreen('library');
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) updateBadge(); });
 }

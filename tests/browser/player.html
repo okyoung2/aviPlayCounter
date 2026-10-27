@@ -92,6 +92,19 @@ document.getElementById('run').addEventListener('click', async () => {
   log(playing.join(',') === 'true,false', 'onPlayingChange follows play and pause', playing.join(','));
   player.stop();
 
+  // 화면이 꺼진 상태 등에서 다음 회차 재생이 거부되면, 멈춘 것으로 알려야 한다.
+  const audioEl = document.getElementById('audio');
+  playing.length = 0;
+  await player.load(tick, 'audio');
+  await player.play();
+  await sleep(100);
+  const realPlay = audioEl.play;
+  audioEl.play = () => Promise.reject(new DOMException('blocked', 'NotAllowedError'));
+  await player.restart();
+  audioEl.play = realPlay;
+  log(playing.at(-1) === false, 'rejected restart reports not playing', playing.join(','));
+  player.stop();
+
   try {
     await player.load(new Blob([new Uint8Array(1000)], { type: 'video/mp4' }), 'video');
     log(false, 'broken file is rejected', 'resolved');

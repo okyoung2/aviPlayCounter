@@ -134,9 +134,10 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
       audio.pause();
     },
 
+    // 거부되면(화면 꺼짐 등) pause 이벤트가 오지 않으므로 멈춤을 직접 알린다.
     restart() {
       audio.currentTime = 0;
-      return audio.play().catch(() => {});
+      return audio.play().catch(() => { if (active) playingCb?.(false); });
     },
 
     stop() {
