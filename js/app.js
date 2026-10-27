@@ -249,8 +249,19 @@ function hideControls() {
   $('controls').hidden = true;
 }
 
+// 재생 중에는 주소창 없이 화면 가득 보여 준다. 터치 처리 중에(첫 await 전에) 불러야 한다.
+function enterFullscreen() {
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+
+function exitFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
 async function startPlayback(item, settings) {
   if (starting) return;
+  enterFullscreen();
   starting = true;
   try {
     await startPlaybackOnce(item, settings);
@@ -267,6 +278,7 @@ async function startPlaybackOnce(item, settings) {
     await player.load(await store.getBlob(item.id), item.kind);
   } catch {
     player.stop();
+    exitFullscreen();
     openSetup(item);
     $('setup-error').textContent = '이 파일은 재생할 수 없어요';
     $('setup-error').hidden = false;
@@ -340,6 +352,7 @@ function finish(completed, { silent = false } = {}) {
   player.stop();
   hideControls();
   if (silent) return;
+  exitFullscreen();
   $('result-count').textContent = completed ? `${s.counter.target}회 완료` : `${s.counter.completed}회 재생`;
   $('result-time').textContent = `걸린 시간 ${formatElapsed(s.stopwatch.elapsedMs())}`;
   $('result-name').textContent = s.item.name;
@@ -370,6 +383,7 @@ function bindEvents() {
 
   $('screen-player').addEventListener('click', (e) => {
     if (e.target.closest('#controls')) return;
+    enterFullscreen(); // 화면을 껐다 켜서 전체 화면이 풀렸으면 다시 들어간다.
     if ($('controls').hidden) showControls();
     else hideControls();
   });

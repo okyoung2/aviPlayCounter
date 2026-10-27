@@ -105,6 +105,20 @@ document.getElementById('run').addEventListener('click', async () => {
   log(playing.at(-1) === false, 'rejected restart reports not playing', playing.join(','));
   player.stop();
 
+  // 동영상 파일이면 소리 재생기에는 영상 트랙을 뺀 파일을 넣는다(화면이 꺼져도 멈추지 않게).
+  const clip = await (await fetch('../fixtures/clip.mp4')).blob();
+  await player.load(clip, 'video');
+  const probe = document.createElement('video');
+  probe.muted = true;
+  probe.src = audioEl.src;
+  await new Promise((r) => { probe.onloadedmetadata = r; probe.onerror = r; });
+  const videoEl = document.getElementById('video');
+  await new Promise((r) => (videoEl.readyState >= 1 ? r() : (videoEl.onloadedmetadata = r)));
+  log(audioEl.src !== videoEl.src && probe.videoWidth === 0 && probe.duration > 1 && videoEl.videoWidth > 0,
+    'video file: audio source has no video track, picture source does',
+    `probeWidth=${probe.videoWidth} dur=${probe.duration?.toFixed(2)} videoWidth=${videoEl.videoWidth}`);
+  player.stop();
+
   // 정지하면 잠금 화면 정보도 지운다.
   if ('mediaSession' in navigator) {
     await player.load(tick, 'audio');

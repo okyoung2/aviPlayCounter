@@ -1,3 +1,5 @@
+import { stripVideoTracks } from './audio-track.js';
+
 // 미디어 엔진. 소리는 항상 <audio> 하나에서만 나오고, <video> 는 음소거로 그림만 맞춘다.
 // 화면이 꺼져 영상이 멈춰도 소리를 넘겨줄 일이 없으므로 회차가 어긋나지 않는다.
 const LOAD_TIMEOUT_MS = 10_000;
@@ -16,7 +18,7 @@ function makeAlert(src, which) {
 export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   const alerts = { last: makeAlert(lastAlertSrc, 'last'), done: makeAlert(doneAlertSrc, 'done') };
   let kind = 'audio';
-  let url = null;
+  let urls = [];
   let active = false;
   let loaded = false;
   let endedCb = null;
@@ -95,16 +97,21 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
     video.removeAttribute('src');
     audio.load();
     video.load();
-    if (url) URL.revokeObjectURL(url);
-    url = null;
+    urls.forEach((u) => URL.revokeObjectURL(u));
+    urls = [];
   }
 
   return {
-    load(blob, newKind) {
+    async load(blob, newKind) {
       unload();
       kind = newKind;
-      url = URL.createObjectURL(blob);
       active = true;
+      // 동영상이면 소리 재생기에는 영상 트랙을 뺀 파일을 준다. 못 빼면 원본을 쓴다.
+      const audioBlob = kind === 'video' ? (await stripVideoTracks(blob)) ?? blob : blob;
+      if (!active) throw new Error('cancelled');
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const videoUrl = kind === 'video' ? URL.createObjectURL(blob) : null;
+      urls = [audioUrl, videoUrl].filter(Boolean);
       return new Promise((resolve, reject) => {
         const cleanup = () => {
           clearTimeout(timer);
@@ -116,8 +123,8 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
         const timer = setTimeout(onFail, LOAD_TIMEOUT_MS);
         audio.addEventListener('loadedmetadata', onOk);
         audio.addEventListener('error', onFail);
-        audio.src = url;
-        if (kind === 'video') video.src = url;
+        audio.src = audioUrl;
+        if (videoUrl) video.src = videoUrl;
         syncTimer = setInterval(() => { if (!audio.paused) syncVideo(); }, SYNC_INTERVAL_MS);
       });
     },
