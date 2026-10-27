@@ -25,3 +25,17 @@ export function resolveSettings(itemSettings, lastUsed) {
 export function targetOf(settings) {
   return settings.count ?? Infinity;
 }
+
+export const CORNER_ARROWS = Object.freeze({
+  'top-left': '↖',
+  'top-right': '↗',
+  'bottom-left': '↙',
+  'bottom-right': '↘',
+});
+
+// 목록에 보여 줄 한 줄 요약.
+export function describeSettings(s) {
+  const onOff = (v) => (v ? 'ON' : 'OFF');
+  const count = s.count === null ? '무한 반복' : `${s.count}회`;
+  return `${count} · ${CORNER_ARROWS[s.corner]} · 🔔 마지막 ${onOff(s.lastAlert)} · 완료 ${onOff(s.doneAlert)}`;
+}

@@ -1,13 +1,14 @@
 import { openStore, createMemoryStore } from './store.js';
 import { sortLibrary } from './library.js';
-import { PRESETS, CORNERS, parseCustomCount, resolveSettings, targetOf } from './settings.js';
+import {
+  PRESETS, CORNERS, CORNER_ARROWS, parseCustomCount, resolveSettings, targetOf, describeSettings,
+} from './settings.js';
 import { formatElapsed } from './format.js';
 import { createPlayer } from './player.js';
 import { createCounter } from './counter.js';
 import { createStopwatch } from './stopwatch.js';
 
 const $ = (id) => document.getElementById(id);
-const CORNER_LABELS = { 'top-left': '↖', 'top-right': '↗', 'bottom-left': '↙', 'bottom-right': '↘' };
 const CORNER_NAMES = { 'top-left': '왼쪽 위', 'top-right': '오른쪽 위', 'bottom-left': '왼쪽 아래', 'bottom-right': '오른쪽 아래' };
 
 let store;
@@ -90,11 +91,14 @@ function renderLibrary() {
           onclick: () => { pendingDeleteId = item.id; renderLibrary(); },
         }, '🗑')),
     );
-    if (item.favorite) {
-      li.append(el('button', {
-        class: 'primary quick', type: 'button', onclick: () => quickPlay(item),
-      }, '▶ 바로 재생'));
-    }
+    // 지금 설정을 보여 주고, 횟수·소리를 바꾸는 곳을 바로 알 수 있게 한다.
+    li.append(el('p', { class: 'item-settings' },
+      item.settings ? describeSettings(item.settings) : '반복 횟수·알림음을 아직 정하지 않았어요'));
+    li.append(el('div', { class: 'item-buttons' },
+      el('button', { class: 'secondary', type: 'button', onclick: () => openSetup(item) }, '⚙ 횟수·소리 설정'),
+      item.favorite
+        ? el('button', { class: 'primary', type: 'button', onclick: () => quickPlay(item) }, '▶ 바로 재생')
+        : ''));
     if (pendingDeleteId === item.id) {
       li.append(el('div', { class: 'confirm-row' },
         el('span', {}, '목록에서 지울까요?'),
@@ -173,7 +177,7 @@ function renderSetup() {
   $('custom-error').hidden = !invalid || draft.customText === '';
   $('start-btn').disabled = invalid;
 
-  $('corner-chips').replaceChildren(...CORNERS.map((c) => chip(CORNER_LABELS[c], draft.corner === c, () => {
+  $('corner-chips').replaceChildren(...CORNERS.map((c) => chip(CORNER_ARROWS[c], draft.corner === c, () => {
     draft.corner = c;
     renderSetup();
   }, CORNER_NAMES[c])));
@@ -196,6 +200,12 @@ async function saveSettings(item, settings) {
 }
 
 function quickPlay(item) {
+  // 한 번도 설정한 적 없는 파일은 기본값으로 시작하지 않고 먼저 설정 화면을 연다.
+  if (!item.settings) {
+    openSetup(item);
+    toast('먼저 반복 횟수와 알림음을 정하고 ▶ 시작을 눌러 주세요.');
+    return;
+  }
   const settings = resolveSettings(item.settings, lastUsed);
   setupItem = item;
   begin(item, settings);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCustomCount, resolveSettings, targetOf, DEFAULT_SETTINGS, PRESETS, CORNERS } from '../js/settings.js';
+import { parseCustomCount, resolveSettings, targetOf, describeSettings, DEFAULT_SETTINGS, PRESETS, CORNERS } from '../js/settings.js';
 
 test('constants match the spec', () => {
   assert.deepEqual(PRESETS, [3, 9, 11, 27, 54, 108]);
@@ -27,4 +27,14 @@ test('resolveSettings prefers item, then last used, then defaults', () => {
 test('targetOf maps null to Infinity', () => {
   assert.equal(targetOf({ ...DEFAULT_SETTINGS, count: null }), Infinity);
   assert.equal(targetOf(DEFAULT_SETTINGS), 108);
+});
+
+test('describeSettings summarizes count, corner and alerts', () => {
+  assert.equal(describeSettings(DEFAULT_SETTINGS), '108회 · ↗ · 🔔 마지막 ON · 완료 ON');
+  assert.equal(
+    describeSettings({ count: null, corner: 'bottom-left', lastAlert: false, doneAlert: true }),
+    '무한 반복 · ↙ · 🔔 마지막 OFF · 완료 ON');
+  assert.equal(
+    describeSettings({ count: 7, corner: 'top-left', lastAlert: true, doneAlert: false }),
+    '7회 · ↖ · 🔔 마지막 ON · 완료 OFF');
 });

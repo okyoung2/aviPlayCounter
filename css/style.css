@@ -78,7 +78,9 @@ h3 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 24px 0 8px;
 .icon-btn { min-width: 48px; padding: 8px; background: none; font-size: 20px; }
 .icon-btn.fav { color: var(--muted); }
 .icon-btn.fav[aria-pressed="true"] { color: var(--accent); }
-.quick { grid-column: 1 / -1; }
+.item-settings { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 14px; }
+.item-buttons { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.item-buttons > button:only-child { grid-column: 1 / -1; }
 .confirm-row {
   grid-column: 1 / -1;
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
