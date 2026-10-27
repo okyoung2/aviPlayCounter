@@ -163,3 +163,15 @@ h3 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 24px 0 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   font-size: 15px; white-space: pre-line; z-index: 10;
 }
+
+.help {
+  margin-top: 28px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 4px 14px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.help summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--text); }
+.help b { color: var(--text); }
+.help ol { padding-left: 20px; }

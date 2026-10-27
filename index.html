@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b1712">
 <title>만트라 반복 재생</title>
 <link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/style.css">
 <script type="module" src="js/app.js"></script>
 </head>
@@ -21,6 +23,15 @@
   <p class="hint">카톡에서 받은 파일은 보통 Movies/KakaoTalk(동영상) 또는 Download/KakaoTalk(음성·기타)에 있어요. 카톡에서 먼저 '저장'을 눌러 주세요.</p>
   <p id="empty" class="empty" hidden>아직 추가한 파일이 없어요.<br>위의 <b>＋ 파일 추가</b>를 눌러 만트라 파일을 골라 주세요.</p>
   <ul id="library-list" class="library"></ul>
+  <details class="help">
+    <summary>화면을 끄면 재생이 멈추나요?</summary>
+    <p>삼성 휴대폰의 절전 기능이 크롬을 재우면 화면이 꺼진 동안 재생이 멈출 수 있어요. 아래처럼 크롬을 예외로 두세요.</p>
+    <ol>
+      <li><b>설정 &gt; 배터리 &gt; 백그라운드 사용 제한</b>에서 <b>절전 예외 앱</b>에 <b>Chrome</b>을 추가해 주세요.</li>
+      <li>같은 화면의 <b>잠자는 앱</b>, <b>깊은 잠자는 앱</b> 목록에 Chrome이 있으면 빼 주세요.</li>
+    </ol>
+    <p>크롬 메뉴(⋮)의 <b>홈 화면에 추가</b>로 앱처럼 열 수 있어요.</p>
+  </details>
 </section>
 
 <section id="screen-setup" class="screen" hidden>
