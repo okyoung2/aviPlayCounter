@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1712">
+<title>만트라 반복 재생</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+
+<section id="screen-library" class="screen">
+  <header class="top">
+    <h1>만트라 반복 재생</h1>
+  </header>
+  <p id="temp-notice" class="notice" hidden>이 브라우저에서는 목록이 저장되지 않아요</p>
+  <button id="add-btn" class="primary wide" type="button">＋ 파일 추가</button>
+  <input id="file-input" type="file" accept="video/*,audio/*" multiple hidden>
+  <p class="hint">카톡에서 받은 파일은 보통 Movies/KakaoTalk(동영상) 또는 Download/KakaoTalk(음성·기타)에 있어요. 카톡에서 먼저 '저장'을 눌러 주세요.</p>
+  <p id="empty" class="empty" hidden>아직 추가한 파일이 없어요.<br>위의 <b>＋ 파일 추가</b>를 눌러 만트라 파일을 골라 주세요.</p>
+  <ul id="library-list" class="library"></ul>
+</section>
+
+<section id="screen-setup" class="screen" hidden>
+  <header class="top">
+    <button id="back-btn" class="link" type="button">← 목록</button>
+  </header>
+  <h2 id="setup-name" class="file-name"></h2>
+
+  <h3>반복 횟수</h3>
+  <div id="count-chips" class="chips" role="radiogroup" aria-label="반복 횟수"></div>
+  <div id="custom-row" class="custom-row" hidden>
+    <input id="custom-count" type="text" inputmode="numeric" maxlength="4" placeholder="횟수" aria-label="반복 횟수 직접 입력">
+    <span>회</span>
+  </div>
+  <p id="custom-error" class="error" hidden>1~9999 사이 숫자를 넣어 주세요</p>
+
+  <h3>횟수 표시 위치</h3>
+  <div id="corner-chips" class="chips corners" role="radiogroup" aria-label="횟수 표시 위치"></div>
+
+  <h3>알림음</h3>
+  <label class="switch"><input id="last-alert" type="checkbox"><span>마지막 회차 알림음</span></label>
+  <label class="switch"><input id="done-alert" type="checkbox"><span>완료 알림음</span></label>
+
+  <p id="setup-error" class="error" hidden></p>
+  <button id="start-btn" class="primary wide big" type="button">▶ 시작</button>
+</section>
+
+<section id="screen-player" class="screen player" hidden>
+  <video id="video" playsinline muted></video>
+  <div id="audio-title" class="audio-title" hidden></div>
+  <div id="badge" class="badge top-right" aria-live="off">
+    <div id="badge-count" class="badge-count"></div>
+    <div id="badge-time" class="badge-time"></div>
+  </div>
+  <div id="controls" class="controls" hidden>
+    <button id="pause-btn" class="primary" type="button">⏸ 일시정지</button>
+    <button id="stop-btn" class="secondary" type="button">■ 정지</button>
+  </div>
+</section>
+
+<section id="screen-result" class="screen result" hidden>
+  <p id="result-count" class="result-count"></p>
+  <p id="result-time" class="result-time"></p>
+  <p id="result-name" class="result-name"></p>
+  <button id="again-btn" class="primary wide big" type="button">다시 하기</button>
+  <button id="home-btn" class="secondary wide" type="button">처음으로</button>
+</section>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<audio id="audio" preload="auto"></audio>
+
+</body>
+</html>

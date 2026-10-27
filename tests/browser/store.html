@@ -13,7 +13,7 @@
 <h1>store.js 검사</h1>
 <pre id="out"></pre>
 <script type="module">
-import { openStore } from '../../js/store.js';
+import { openStore, createMemoryStore } from '../../js/store.js';
 
 const DB = 'mantra-player-test';
 const out = document.getElementById('out');
@@ -88,6 +88,17 @@ await check('removeItem deletes item and blob', async () => {
   let blobGone = false;
   try { await store.getBlob(omId); } catch { blobGone = true; }
   return items.length === 1 && blobGone;
+});
+
+await check('memory store adds, lists, returns blobs and skips duplicates', async () => {
+  const mem = createMemoryStore();
+  const r = await mem.addFiles([video, video]);
+  const id = r.added[0].id;
+  const blob = await mem.getBlob(id);
+  await mem.updateItem(id, { favorite: true });
+  await mem.setLastUsed(settings);
+  return r.added.length === 1 && r.skipped.length === 1 && blob.size === 2000
+    && (await mem.listItems())[0].favorite === true && (await mem.getLastUsed()).count === 27;
 });
 
 const done = document.createElement('h2');

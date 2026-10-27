@@ -33,6 +33,72 @@ function probeDuration(file, kind) {
   });
 }
 
+// 파일마다 검사하고 save(item, file) 로 저장한다. 한 파일의 실패가 나머지를 막지 않는다.
+async function addFilesWith(files, existing, save) {
+  const result = { added: [], skipped: [], failed: [] };
+  for (const file of files) {
+    const kind = kindOf(file.type, file.name);
+    if (!kind) {
+      result.failed.push(`"${file.name}"은(는) 동영상/음성 파일이 아니에요.`);
+      continue;
+    }
+    if (isDuplicate(existing, file)) {
+      result.skipped.push(`이미 목록에 있어요: ${file.name}`);
+      continue;
+    }
+    const item = {
+      id: crypto.randomUUID(),
+      name: file.name,
+      size: file.size,
+      kind,
+      durationSec: await probeDuration(file, kind),
+      favorite: false,
+      addedAt: Date.now(),
+      settings: null,
+    };
+    try {
+      await save(item, file);
+      existing.push(item);
+      result.added.push(item);
+    } catch (err) {
+      result.failed.push(describeAddError(err, file.name));
+    }
+  }
+  return result;
+}
+
+// 저장소를 열 수 없을 때 쓰는 임시 저장소. 같은 API, 메모리에만 보관.
+export function createMemoryStore() {
+  const items = new Map();
+  const blobs = new Map();
+  let lastUsed = null;
+  return {
+    async listItems() { return [...items.values()].map((it) => ({ ...it })); },
+    addFiles(files) {
+      return addFilesWith(files, [...items.values()], async (item, file) => {
+        items.set(item.id, item);
+        blobs.set(item.id, file);
+      });
+    },
+    async updateItem(id, patch) {
+      const current = items.get(id);
+      if (!current) throw new Error(`no item ${id}`);
+      const next = { ...current, ...patch, id };
+      items.set(id, next);
+      return next;
+    },
+    async removeItem(id) { items.delete(id); blobs.delete(id); },
+    async getBlob(id) {
+      const blob = blobs.get(id);
+      if (!blob) throw new Error(`no blob ${id}`);
+      return blob;
+    },
+    async getLastUsed() { return lastUsed; },
+    async setLastUsed(settings) { lastUsed = settings; },
+    close() {},
+  };
+}
+
 export async function openStore(dbName = 'mantra-player') {
   const open = indexedDB.open(dbName, VERSION);
   open.onupgradeneeded = () => {
@@ -52,43 +118,15 @@ export async function openStore(dbName = 'mantra-player') {
     listItems,
 
     async addFiles(files) {
-      const result = { added: [], skipped: [], failed: [] };
       if (files.length && navigator.storage?.persisted && !(await navigator.storage.persisted())) {
         navigator.storage.persist?.().catch(() => {});
       }
-      const existing = await listItems();
-      for (const file of files) {
-        const kind = kindOf(file.type, file.name);
-        if (!kind) {
-          result.failed.push(`"${file.name}"은(는) 동영상/음성 파일이 아니에요.`);
-          continue;
-        }
-        if (isDuplicate(existing, file)) {
-          result.skipped.push(`이미 목록에 있어요: ${file.name}`);
-          continue;
-        }
-        const item = {
-          id: crypto.randomUUID(),
-          name: file.name,
-          size: file.size,
-          kind,
-          durationSec: await probeDuration(file, kind),
-          favorite: false,
-          addedAt: Date.now(),
-          settings: null,
-        };
-        try {
-          const tx = db.transaction(['items', 'blobs'], 'readwrite');
-          tx.objectStore('items').put(item);
-          tx.objectStore('blobs').put(file, item.id);
-          await txDone(tx);
-          existing.push(item);
-          result.added.push(item);
-        } catch (err) {
-          result.failed.push(describeAddError(err, file.name));
-        }
-      }
-      return result;
+      return addFilesWith(files, await listItems(), async (item, file) => {
+        const tx = db.transaction(['items', 'blobs'], 'readwrite');
+        tx.objectStore('items').put(item);
+        tx.objectStore('blobs').put(file, item.id);
+        await txDone(tx);
+      });
     },
 
     async updateItem(id, patch) {
