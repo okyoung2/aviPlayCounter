@@ -1,7 +1,10 @@
 import { openStore, createMemoryStore } from './store.js';
 import { sortLibrary } from './library.js';
-import { PRESETS, CORNERS, parseCustomCount, resolveSettings } from './settings.js';
+import { PRESETS, CORNERS, parseCustomCount, resolveSettings, targetOf } from './settings.js';
 import { formatElapsed } from './format.js';
+import { createPlayer } from './player.js';
+import { createCounter } from './counter.js';
+import { createStopwatch } from './stopwatch.js';
 
 const $ = (id) => document.getElementById(id);
 const CORNER_LABELS = { 'top-left': '↖', 'top-right': '↗', 'bottom-left': '↙', 'bottom-right': '↘' };
@@ -188,10 +191,115 @@ function begin(item, settings) {
   return started;
 }
 
-// ---- 재생 (Task 8 에서 채움) ----
+// ---- 재생 ----
+
+const CONTROLS_HIDE_MS = 3000;
+let player;
+let session = null; // { item, settings, counter, stopwatch, tick, playing }
+let lastSession = null;
+let controlsTimer = null;
+
+const progressText = (counter) =>
+  `${counter.current} / ${counter.target === Infinity ? '∞' : counter.target}`;
+
+function updateBadge() {
+  if (!session) return;
+  $('badge-count').textContent = progressText(session.counter);
+  $('badge-time').textContent = formatElapsed(session.stopwatch.elapsedMs());
+}
+
+function showControls() {
+  $('controls').hidden = false;
+  clearTimeout(controlsTimer);
+  // 일시정지 중에는 계속 보여 준다.
+  if (session?.playing) controlsTimer = setTimeout(() => { $('controls').hidden = true; }, CONTROLS_HIDE_MS);
+}
+
+function hideControls() {
+  clearTimeout(controlsTimer);
+  $('controls').hidden = true;
+}
 
 async function startPlayback(item, settings) {
+  // 터치 처리 중에 먼저 불러서, 화면이 꺼진 뒤에도 알림음이 울리게 한다.
+  const primed = player.primeAlerts();
+  if (session) finish(false, { silent: true });
+  try {
+    await player.load(await store.getBlob(item.id), item.kind);
+  } catch {
+    player.stop();
+    openSetup(item);
+    $('setup-error').textContent = '이 파일은 재생할 수 없어요';
+    $('setup-error').hidden = false;
+    return;
+  }
+  await primed;
+
+  const counter = createCounter(targetOf(settings));
+  const stopwatch = createStopwatch();
+  stopwatch.start();
+  stopwatch.pause(); // 실제로 소리가 나기 시작할 때부터 센다(onPlayingChange).
+  session = { item, settings, counter, stopwatch, tick: setInterval(updateBadge, 500), playing: false };
+  lastSession = { item, settings };
+
+  $('badge').className = `badge ${settings.corner}`;
+  $('video').hidden = item.kind !== 'video';
+  $('audio-title').hidden = item.kind === 'video';
+  $('audio-title').textContent = item.name;
+  hideControls();
   showScreen('player');
+  history.pushState({ screen: 'player' }, '');
+
+  const step = counter.start();
+  if (step.lastRound && settings.lastAlert) player.playAlert('last');
+  player.setNowPlaying(item.name, progressText(counter));
+  updateBadge();
+  try {
+    await player.play();
+  } catch {
+    showControls(); // 자동 재생이 막히면 ▶ 재개 버튼으로 시작한다.
+  }
+}
+
+function onTrackEnded() {
+  if (!session) return;
+  const { counter, settings, item } = session;
+  const step = counter.trackEnded();
+  if (step.action === 'play') {
+    if (step.lastRound && settings.lastAlert) player.playAlert('last');
+    player.restart();
+    player.setNowPlaying(item.name, progressText(counter));
+    updateBadge();
+  } else if (step.complete) {
+    if (settings.doneAlert) player.playAlert('done');
+    finish(true);
+  }
+}
+
+function onPlayingChange(playing) {
+  // 회차가 바뀔 때도 play 이벤트가 오므로, 상태가 실제로 바뀔 때만 반응한다.
+  if (!session || session.playing === playing) return;
+  session.playing = playing;
+  if (playing) session.stopwatch.resume();
+  else session.stopwatch.pause();
+  $('pause-btn').textContent = playing ? '⏸ 일시정지' : '▶ 재개';
+  updateBadge();
+  if (!$('controls').hidden || !playing) showControls();
+}
+
+// completed: 목표를 채움. 아니면 사용자가 정지함.
+function finish(completed, { silent = false } = {}) {
+  const s = session;
+  session = null;
+  clearInterval(s.tick);
+  s.stopwatch.pause();
+  player.stop();
+  hideControls();
+  if (silent) return;
+  $('result-count').textContent = completed ? `${s.counter.target}회 완료` : `${s.counter.completed}회 재생`;
+  $('result-time').textContent = `걸린 시간 ${formatElapsed(s.stopwatch.elapsedMs())}`;
+  $('result-name').textContent = s.item.name;
+  showScreen('result');
 }
 
 // ---- 시작 ----
@@ -215,9 +323,40 @@ function bindEvents() {
     if ($('start-btn').disabled) return;
     begin(setupItem, draftSettings());
   });
+
+  $('screen-player').addEventListener('click', (e) => {
+    if (e.target.closest('#controls')) return;
+    if ($('controls').hidden) showControls();
+    else hideControls();
+  });
+  $('pause-btn').addEventListener('click', () => {
+    if (!session) return;
+    if (session.playing) player.pause();
+    else player.play().catch(() => {});
+  });
+  $('stop-btn').addEventListener('click', () => { if (session) finish(false); });
+  $('again-btn').addEventListener('click', () => {
+    if (lastSession) startPlayback(lastSession.item, lastSession.settings);
+  });
+  $('home-btn').addEventListener('click', () => showScreen('library'));
+
+  // 재생 중 뒤로 가기는 정지와 같다. 결과 화면에서 뒤로 가면 목록으로.
+  window.addEventListener('popstate', () => {
+    if (session) finish(false);
+    else if (!$('screen-result').hidden) showScreen('library');
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateBadge(); });
 }
 
 async function init() {
+  player = createPlayer({
+    audio: $('audio'),
+    video: $('video'),
+    lastAlertSrc: 'sounds/last.wav',
+    doneAlertSrc: 'sounds/done.wav',
+  });
+  player.onEnded(onTrackEnded);
+  player.onPlayingChange(onPlayingChange);
   bindEvents();
   try {
     store = await openStore();
