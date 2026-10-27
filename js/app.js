@@ -38,13 +38,14 @@ function go(name) {
 }
 
 let toastTimer = null;
-function toast(lines) {
+// sticky: 다음 안내가 나올 때까지 계속 보여 준다.
+function toast(lines, { sticky = false } = {}) {
   const text = [].concat(lines).filter(Boolean).join('\n');
   if (!text) return;
   $('toast').textContent = text;
   $('toast').hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4000);
+  if (!sticky) toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4000);
 }
 
 function el(tag, props = {}, ...children) {
@@ -117,10 +118,14 @@ async function removeItem(item) {
 
 async function addFiles(files) {
   if (!files.length) return;
-  toast('파일을 추가하는 중이에요…');
-  const r = await store.addFiles(files);
-  await refreshLibrary();
-  toast([r.added.length ? `${r.added.length}개 추가했어요.` : '', ...r.skipped, ...r.failed]);
+  toast('파일을 추가하는 중이에요…', { sticky: true });
+  try {
+    const r = await store.addFiles(files);
+    await refreshLibrary();
+    toast([r.added.length ? `${r.added.length}개 추가했어요.` : '', ...r.skipped, ...r.failed]);
+  } catch {
+    toast('파일을 추가하지 못했어요. 다시 시도해 주세요.');
+  }
 }
 
 // ---- 설정 ----
@@ -210,6 +215,7 @@ let player;
 let session = null; // { item, settings, counter, stopwatch, tick, playing }
 let lastSession = null;
 let controlsTimer = null;
+let starting = false; // 시작 버튼을 빠르게 두 번 눌러도 한 번만 시작한다.
 
 const progressText = (counter) =>
   `${counter.current} / ${counter.target === Infinity ? '∞' : counter.target}`;
@@ -233,6 +239,16 @@ function hideControls() {
 }
 
 async function startPlayback(item, settings) {
+  if (starting) return;
+  starting = true;
+  try {
+    await startPlaybackOnce(item, settings);
+  } finally {
+    starting = false;
+  }
+}
+
+async function startPlaybackOnce(item, settings) {
   // 터치 처리 중에 먼저 불러서, 화면이 꺼진 뒤에도 알림음이 울리게 한다.
   const primed = player.primeAlerts();
   if (session) finish(false, { silent: true });
@@ -285,6 +301,12 @@ function onTrackEnded() {
     if (settings.doneAlert) player.playAlert('done');
     finish(true);
   }
+}
+
+function onPlaybackError() {
+  if (!session) return;
+  toast('재생 중 오류가 나서 멈췄어요.');
+  finish(false);
 }
 
 function onPlayingChange(playing) {
@@ -373,6 +395,7 @@ async function init() {
   });
   player.onEnded(onTrackEnded);
   player.onPlayingChange(onPlayingChange);
+  player.onError(onPlaybackError);
   bindEvents();
   try {
     store = await openStore();

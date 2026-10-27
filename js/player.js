@@ -18,7 +18,9 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   let kind = 'audio';
   let url = null;
   let active = false;
+  let loaded = false;
   let endedCb = null;
+  let errorCb = null;
   let playingCb = null;
   let wakeLock = null;
   let syncTimer = null;
@@ -40,8 +42,11 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   async function requestWakeLock() {
     if (!navigator.wakeLock || document.hidden || wakeLock) return;
     try {
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
+      const lock = await navigator.wakeLock.request('screen');
+      // 요청하는 사이에 정지됐으면 바로 놓는다.
+      if (!active || audio.paused) { lock.release().catch(() => {}); return; }
+      wakeLock = lock;
+      lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
     } catch { /* 지원 안 함 또는 거부: 무시 */ }
   }
 
@@ -51,6 +56,8 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   }
 
   audio.addEventListener('ended', () => { if (active) endedCb?.(); });
+  // 불러온 뒤에 생긴 오류(재생 도중 디코딩 실패 등). 불러오는 중의 오류는 load() 가 처리한다.
+  audio.addEventListener('error', () => { if (active && loaded) errorCb?.(); });
   audio.addEventListener('play', () => {
     if (!active) return;
     playingCb?.(true);
@@ -79,6 +86,7 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
 
   function unload() {
     active = false;
+    loaded = false;
     clearInterval(syncTimer);
     syncTimer = null;
     audio.pause();
@@ -103,7 +111,7 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
           audio.removeEventListener('loadedmetadata', onOk);
           audio.removeEventListener('error', onFail);
         };
-        const onOk = () => { cleanup(); resolve(); };
+        const onOk = () => { cleanup(); loaded = true; resolve(); };
         const onFail = () => { cleanup(); unload(); reject(new Error('unplayable')); };
         const timer = setTimeout(onFail, LOAD_TIMEOUT_MS);
         audio.addEventListener('loadedmetadata', onOk);
@@ -143,11 +151,15 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
     stop() {
       unload();
       releaseWakeLock();
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'none';
+        navigator.mediaSession.metadata = null;
+      }
     },
 
     onEnded(cb) { endedCb = cb; },
     onPlayingChange(cb) { playingCb = cb; },
+    onError(cb) { errorCb = cb; },
 
     playAlert(which) {
       const el = alerts[which];

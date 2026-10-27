@@ -101,6 +101,15 @@ await check('memory store adds, lists, returns blobs and skips duplicates', asyn
     && (await mem.listItems())[0].favorite === true && (await mem.getLastUsed()).count === 27;
 });
 
+await check('overlapping adds of the same file add it once', async () => {
+  const twice = new File([new Uint8Array(3000)], 'twice.mp4', { type: 'video/mp4' });
+  const [a, b] = await Promise.all([store.addFiles([twice]), store.addFiles([twice])]);
+  const mem = createMemoryStore();
+  const [c, d] = await Promise.all([mem.addFiles([twice]), mem.addFiles([twice])]);
+  return a.added.length + b.added.length === 1 && a.skipped.length + b.skipped.length === 1
+    && c.added.length + d.added.length === 1;
+});
+
 const done = document.createElement('h2');
 done.id = 'result';
 done.textContent = failed === 0 ? 'ALL PASS' : `FAILED ${failed}`;

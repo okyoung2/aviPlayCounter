@@ -105,6 +105,45 @@ document.getElementById('run').addEventListener('click', async () => {
   log(playing.at(-1) === false, 'rejected restart reports not playing', playing.join(','));
   player.stop();
 
+  // 정지하면 잠금 화면 정보도 지운다.
+  if ('mediaSession' in navigator) {
+    await player.load(tick, 'audio');
+    player.setNowPlaying('test', '1 / 3');
+    player.stop();
+    log(navigator.mediaSession.metadata === null, 'stop clears lock screen info');
+  }
+
+  // 재생 도중 오류는 onError 로 알린다(정지 뒤에는 무시).
+  let errors = 0;
+  player.onError(() => errors++);
+  await player.load(tick, 'audio');
+  await player.play();
+  audioEl.dispatchEvent(new Event('error'));
+  log(errors === 1, 'playback error is reported', `errors=${errors}`);
+  player.stop();
+  audioEl.dispatchEvent(new Event('error'));
+  log(errors === 1, 'error after stop is ignored', `errors=${errors}`);
+
+  // 화면 꺼짐 방지 요청이 정지 뒤에 끝나도 바로 해제한다.
+  let releases = 0;
+  let grant;
+  Object.defineProperty(navigator, 'wakeLock', {
+    configurable: true,
+    value: {
+      request: () => new Promise((resolve) => {
+        grant = () => resolve({ release: async () => { releases++; }, addEventListener() {} });
+      }),
+    },
+  });
+  await player.load(tick, 'audio');
+  await player.play();
+  await sleep(50);
+  player.stop();
+  grant?.();
+  await sleep(50);
+  delete navigator.wakeLock;
+  log(releases === 1, 'late wake lock is released after stop', `releases=${releases}`);
+
   try {
     await player.load(new Blob([new Uint8Array(1000)], { type: 'video/mp4' }), 'video');
     log(false, 'broken file is rejected', 'resolved');

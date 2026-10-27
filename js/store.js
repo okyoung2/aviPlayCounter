@@ -33,6 +33,16 @@ function probeDuration(file, kind) {
   });
 }
 
+// 추가 작업을 한 번에 하나씩 처리해, 겹친 선택에서 같은 파일이 두 번 들어가지 않게 한다.
+function serialized(fn) {
+  let tail = Promise.resolve();
+  return (...args) => {
+    const run = tail.then(() => fn(...args));
+    tail = run.catch(() => {});
+    return run;
+  };
+}
+
 // 파일마다 검사하고 save(item, file) 로 저장한다. 한 파일의 실패가 나머지를 막지 않는다.
 async function addFilesWith(files, existing, save) {
   const result = { added: [], skipped: [], failed: [] };
@@ -74,12 +84,11 @@ export function createMemoryStore() {
   let lastUsed = null;
   return {
     async listItems() { return [...items.values()].map((it) => ({ ...it })); },
-    addFiles(files) {
-      return addFilesWith(files, [...items.values()], async (item, file) => {
+    addFiles: serialized((files) =>
+      addFilesWith(files, [...items.values()], async (item, file) => {
         items.set(item.id, item);
         blobs.set(item.id, file);
-      });
-    },
+      })),
     async updateItem(id, patch) {
       const current = items.get(id);
       if (!current) throw new Error(`no item ${id}`);
@@ -117,7 +126,7 @@ export async function openStore(dbName = 'mantra-player') {
   return {
     listItems,
 
-    async addFiles(files) {
+    addFiles: serialized(async (files) => {
       if (files.length && navigator.storage?.persisted && !(await navigator.storage.persisted())) {
         navigator.storage.persist?.().catch(() => {});
       }
@@ -127,7 +136,7 @@ export async function openStore(dbName = 'mantra-player') {
         tx.objectStore('blobs').put(file, item.id);
         await txDone(tx);
       });
-    },
+    }),
 
     async updateItem(id, patch) {
       const tx = db.transaction('items', 'readwrite');
