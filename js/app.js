@@ -7,6 +7,7 @@ import { formatElapsed } from './format.js';
 import { createPlayer } from './player.js';
 import { createCounter } from './counter.js';
 import { createStopwatch } from './stopwatch.js';
+import { looksLikeDesktopMode } from './env.js';
 
 const $ = (id) => document.getElementById(id);
 const CORNER_NAMES = { 'top-left': '왼쪽 위', 'top-right': '오른쪽 위', 'bottom-left': '왼쪽 아래', 'bottom-right': '오른쪽 아래' };
@@ -407,6 +408,11 @@ async function init() {
   player.onPlayingChange(onPlayingChange);
   player.onError(onPlaybackError);
   bindEvents();
+  $('desktop-notice').hidden = !looksLikeDesktopMode({
+    innerWidth: window.innerWidth,
+    screenWidth: window.screen.width,
+    coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+  });
   try {
     store = await openStore();
   } catch {
