@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>player 검사</title>
+<style>
+  body { font: 14px/1.5 monospace; padding: 16px; background: #fff; color: #111; }
+  .pass { color: #070; } .fail { color: #b00; }
+  button { font-size: 18px; padding: 8px 16px; }
+  video { width: 160px; background: #000; }
+</style>
+</head>
+<body>
+<h1>player.js 검사</h1>
+<button id="run">▶ 검사 시작</button>
+<audio id="audio"></audio>
+<video id="video" playsinline></video>
+<pre id="out"></pre>
+<script type="module">
+import { createPlayer } from '../../js/player.js';
+import { createCounter } from '../../js/counter.js';
+
+const out = document.getElementById('out');
+let failed = 0;
+const log = (ok, name, extra = '') => {
+  if (!ok) failed++;
+  const line = document.createElement('div');
+  line.className = ok ? 'pass' : 'fail';
+  line.textContent = `${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`;
+  out.append(line);
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 알림음 요소는 player 가 문서에 붙인다(data-alert). 실제로 재생된 횟수를 센다.
+const alertPlays = { last: 0, done: 0 };
+document.addEventListener('play', (e) => {
+  const which = e.target.dataset?.alert;
+  if (which && !e.target.muted) alertPlays[which]++;
+}, true);
+
+document.getElementById('run').addEventListener('click', async () => {
+  const player = createPlayer({
+    audio: document.getElementById('audio'),
+    video: document.getElementById('video'),
+    lastAlertSrc: '../../sounds/last.wav',
+    doneAlertSrc: '../../sounds/done.wav',
+  });
+  const primed = player.primeAlerts();
+  const tick = await (await fetch('../fixtures/tick.wav')).blob();
+
+  try {
+    await primed;
+    await player.load(tick, 'audio');
+    log(true, 'load tick.wav');
+  } catch (e) { log(false, 'load tick.wav', String(e)); }
+
+  const playing = [];
+  player.onPlayingChange((p) => playing.push(p));
+
+  const counter = createCounter(3);
+  let endedCalls = 0;
+  let finished;
+  const done = new Promise((r) => { finished = r; });
+  player.onEnded(() => {
+    endedCalls++;
+    const step = counter.trackEnded();
+    if (step.lastRound) player.playAlert('last');
+    if (step.action === 'play') player.restart();
+    else { if (step.complete) player.playAlert('done'); finished(); }
+  });
+  const first = counter.start();
+  if (first.lastRound) player.playAlert('last');
+  await player.play();
+
+  await Promise.race([done, sleep(8000)]);
+  await sleep(300);
+  log(counter.completed === 3 && endedCalls === 3, 'three rounds counted', `completed=${counter.completed} ended=${endedCalls}`);
+  log(alertPlays.last === 1 && alertPlays.done === 1, 'one last alert and one done alert', JSON.stringify(alertPlays));
+
+  player.stop();
+  document.getElementById('audio').dispatchEvent(new Event('ended'));
+  await sleep(50);
+  log(endedCalls === 3, 'ended after stop is ignored', `ended=${endedCalls}`);
+
+  playing.length = 0;
+  await player.load(tick, 'audio');
+  await player.play();
+  await sleep(100);
+  player.pause();
+  await sleep(100);
+  log(playing.join(',') === 'true,false', 'onPlayingChange follows play and pause', playing.join(','));
+  player.stop();
+
+  try {
+    await player.load(new Blob([new Uint8Array(1000)], { type: 'video/mp4' }), 'video');
+    log(false, 'broken file is rejected', 'resolved');
+  } catch (e) {
+    log(e.message === 'unplayable', 'broken file is rejected', e.message);
+  }
+
+  const result = document.createElement('h2');
+  result.id = 'result';
+  result.textContent = failed === 0 ? 'ALL PASS' : `FAILED ${failed}`;
+  out.append(result);
+});
+</script>
+</body>
+</html>
