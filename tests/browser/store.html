@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>store 검사</title>
+<style>
+  body { font: 14px/1.5 monospace; padding: 16px; background: #fff; color: #111; }
+  .pass { color: #070; } .fail { color: #b00; }
+</style>
+</head>
+<body>
+<h1>store.js 검사</h1>
+<pre id="out"></pre>
+<script type="module">
+import { openStore } from '../../js/store.js';
+
+const DB = 'mantra-player-test';
+const out = document.getElementById('out');
+let failed = 0;
+const log = (ok, name, extra = '') => {
+  if (!ok) failed++;
+  const line = document.createElement('div');
+  line.className = ok ? 'pass' : 'fail';
+  line.textContent = `${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`;
+  out.append(line);
+};
+const check = async (name, fn) => {
+  try { log(await fn(), name); } catch (e) { log(false, name, String(e)); }
+};
+
+await new Promise((res) => {
+  const req = indexedDB.deleteDatabase(DB);
+  req.onsuccess = req.onerror = req.onblocked = res;
+});
+
+const video = new File([new Uint8Array(2000)], 'om.mp4', { type: 'video/mp4' });
+const audio = new File([new Uint8Array(1500)], 'a.mp3', { type: 'audio/mpeg' });
+let store = await openStore(DB);
+let omId;
+
+await check('add two files', async () => {
+  const r = await store.addFiles([video, audio]);
+  omId = r.added.find((x) => x.name === 'om.mp4')?.id;
+  return r.added.length === 2 && r.added[0].kind && r.added[0].favorite === false && r.added[0].settings === null;
+});
+
+await check('re-adding the same file is skipped', async () => {
+  const r = await store.addFiles([new File([new Uint8Array(2000)], 'om.mp4', { type: 'video/mp4' })]);
+  const items = await store.listItems();
+  return r.skipped.length === 1 && r.skipped[0].includes('om.mp4') && items.length === 2;
+});
+
+await check('non-media file fails without blocking', async () => {
+  const r = await store.addFiles([new File(['x'], 'notes.txt', { type: 'text/plain' })]);
+  return r.failed.length === 1 && r.added.length === 0;
+});
+
+const settings = { count: 27, corner: 'bottom-left', lastAlert: true, doneAlert: false };
+await check('updateItem persists favorite and settings', async () => {
+  const updated = await store.updateItem(omId, { favorite: true, settings });
+  const item = (await store.listItems()).find((x) => x.id === omId);
+  return updated.favorite === true && item.favorite === true && item.settings.count === 27;
+});
+
+await check('getBlob returns the original bytes', async () => {
+  const blob = await store.getBlob(omId);
+  return blob.size === 2000;
+});
+
+await check('lastUsed round trip', async () => {
+  const before = await store.getLastUsed();
+  await store.setLastUsed(settings);
+  const after = await store.getLastUsed();
+  return before === null && after.corner === 'bottom-left';
+});
+
+await check('data survives reopening', async () => {
+  store.close();
+  store = await openStore(DB);
+  const items = await store.listItems();
+  return items.length === 2 && items.find((x) => x.id === omId).favorite === true;
+});
+
+await check('removeItem deletes item and blob', async () => {
+  await store.removeItem(omId);
+  const items = await store.listItems();
+  let blobGone = false;
+  try { await store.getBlob(omId); } catch { blobGone = true; }
+  return items.length === 1 && blobGone;
+});
+
+const done = document.createElement('h2');
+done.id = 'result';
+done.textContent = failed === 0 ? 'ALL PASS' : `FAILED ${failed}`;
+out.append(done);
+</script>
+</body>
+</html>
