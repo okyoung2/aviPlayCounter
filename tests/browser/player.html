@@ -62,20 +62,30 @@ document.getElementById('run').addEventListener('click', async () => {
   let endedCalls = 0;
   let finished;
   const done = new Promise((r) => { finished = r; });
-  player.onEnded(() => {
+  // 앱과 같은 방식: 다음 회차가 남았으면 loop 로 이어 틀고, 멈춘 경우에만 다시 재생한다.
+  const audioForCount = document.getElementById('audio');
+  let playCalls = 0;
+  const countedPlay = audioForCount.play;
+  audioForCount.play = function () { playCalls++; return countedPlay.call(this); };
+  player.onEnded(({ wrapped }) => {
     endedCalls++;
     const step = counter.trackEnded();
-    if (step.lastRound) player.playAlert('last');
-    if (step.action === 'play') player.restart();
-    else { if (step.complete) player.playAlert('done'); finished(); }
+    if (step.action === 'play') {
+      player.setLoop(!step.lastRound);
+      if (step.lastRound) player.playAlert('last');
+      if (!wrapped) player.restart();
+    } else { if (step.complete) player.playAlert('done'); finished(); }
   });
   const first = counter.start();
+  player.setLoop(!first.lastRound);
   if (first.lastRound) player.playAlert('last');
   await player.play();
 
   await Promise.race([done, sleep(8000)]);
   await sleep(300);
+  delete audioForCount.play;
   log(counter.completed === 3 && endedCalls === 3, 'three rounds counted', `completed=${counter.completed} ended=${endedCalls}`);
+  log(playCalls === 1, 'rounds continue without calling play() again', `playCalls=${playCalls}`);
   log(alertPlays.last === 1 && alertPlays.done === 1, 'one last alert and one done alert', JSON.stringify(alertPlays));
 
   player.stop();

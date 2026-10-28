@@ -2,6 +2,8 @@ import { stripVideoTracks } from './audio-track.js';
 
 // 미디어 엔진. 소리는 항상 <audio> 하나에서만 나오고, <video> 는 음소거로 그림만 맞춘다.
 // 화면이 꺼져 영상이 멈춰도 소리를 넘겨줄 일이 없으므로 회차가 어긋나지 않는다.
+// 회차 사이에는 멈추지 않고 loop 로 이어 튼다. 화면이 꺼진 동안 끝난 소리를 다시 play() 하면
+// 크롬이 가끔 거부해서 재생이 멈췄다(휴대폰에서 36회 중 3회 뒤 멈춤).
 const LOAD_TIMEOUT_MS = 10_000;
 const SYNC_INTERVAL_MS = 1000;
 const MAX_DRIFT_SEC = 0.3;
@@ -26,6 +28,7 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   let playingCb = null;
   let timeCb = null;
   let wakeLock = null;
+  let lastTime = 0; // loop 로 처음으로 돌아간 것을 알아채는 데 쓴다.
   let syncTimer = null;
 
   video.muted = true;
@@ -58,7 +61,16 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
     wakeLock = null;
   }
 
-  audio.addEventListener('ended', () => { if (active) endedCb?.(); });
+  audio.addEventListener('ended', () => { if (active) endedCb?.({ wrapped: false }); });
+  // loop 가 처음으로 돌아가면 seeked 가 오고 재생 위치가 줄어든다. 둘 중 먼저 온 쪽에서 한 번만 센다.
+  function checkWrap() {
+    const t = audio.currentTime;
+    const wrapped = audio.loop && t < lastTime - 0.2;
+    lastTime = t;
+    if (wrapped && active) endedCb?.({ wrapped: true });
+  }
+  audio.addEventListener('seeked', checkWrap);
+  audio.addEventListener('timeupdate', checkWrap);
   // 불러온 뒤에 생긴 오류(재생 도중 디코딩 실패 등). 불러오는 중의 오류는 load() 가 처리한다.
   audio.addEventListener('error', () => { if (active && loaded) errorCb?.(); });
   audio.addEventListener('play', () => {
@@ -96,6 +108,8 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   function unload() {
     active = false;
     loaded = false;
+    lastTime = 0;
+    audio.loop = false;
     clearInterval(syncTimer);
     syncTimer = null;
     audio.pause();
@@ -156,8 +170,14 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
       audio.pause();
     },
 
-    // 거부되면(화면 꺼짐 등) pause 이벤트가 오지 않으므로 멈춤을 직접 알린다.
+    // 다음 회차가 남아 있으면 켠다. 마지막 회차에서 끄면 그 회차가 끝날 때 ended 가 온다.
+    setLoop(on) {
+      audio.loop = on;
+    },
+
+    // loop 를 끈 채 끝났을 때만 쓴다. 거부되면(화면 꺼짐 등) pause 이벤트가 오지 않으므로 멈춤을 직접 알린다.
     restart() {
+      lastTime = 0;
       audio.currentTime = 0;
       return audio.play().catch(() => { if (active) playingCb?.(false); });
     },

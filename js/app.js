@@ -314,6 +314,7 @@ async function startPlaybackOnce(item, settings) {
   go('player');
 
   const step = counter.start();
+  player.setLoop(!step.lastRound);
   if (step.lastRound && settings.lastAlert) player.playAlert('last');
   player.setNowPlaying(item.name, progressText(counter));
   updateBadge();
@@ -324,13 +325,15 @@ async function startPlaybackOnce(item, settings) {
   }
 }
 
-function onTrackEnded() {
+// wrapped: loop 로 이미 다음 회차가 재생 중이다. 아니면 소리가 멈춘 상태라 다시 틀어야 한다.
+function onTrackEnded({ wrapped }) {
   if (!session) return;
   const { counter, settings, item } = session;
   const step = counter.trackEnded();
   if (step.action === 'play') {
+    player.setLoop(!step.lastRound);
     if (step.lastRound && settings.lastAlert) player.playAlert('last');
-    player.restart();
+    if (!wrapped) player.restart();
     player.setNowPlaying(item.name, progressText(counter));
     updateBadge();
   } else if (step.complete) {
