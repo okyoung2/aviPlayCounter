@@ -3,7 +3,7 @@ import { sortLibrary } from './library.js';
 import {
   PRESETS, CORNERS, CORNER_ARROWS, parseCustomCount, resolveSettings, targetOf, describeSettings,
 } from './settings.js';
-import { formatElapsed } from './format.js';
+import { formatElapsed, progressRatio } from './format.js';
 import { createPlayer } from './player.js';
 import { createCounter } from './counter.js';
 import { createStopwatch } from './stopwatch.js';
@@ -237,19 +237,32 @@ function updateBadge() {
   $('badge-time').textContent = formatElapsed(session.stopwatch.elapsedMs());
 }
 
+function updateProgress(current, duration) {
+  $('progress-fill').style.transform = `scaleX(${progressRatio(current, duration)})`;
+  $('progress-cur').textContent = formatElapsed(current * 1000);
+  $('progress-dur').textContent = Number.isFinite(duration) ? formatElapsed(duration * 1000) : '--:--';
+}
+
+// 진행바는 버튼과 함께 나타나고 사라진다.
+function setControlsHidden(hidden) {
+  $('controls').hidden = hidden;
+  $('progress').hidden = hidden;
+}
+
 function showControls() {
-  $('controls').hidden = false;
+  setControlsHidden(false);
   clearTimeout(controlsTimer);
   // 일시정지 중에는 계속 보여 준다.
-  if (session?.playing) controlsTimer = setTimeout(() => { $('controls').hidden = true; }, CONTROLS_HIDE_MS);
+  if (session?.playing) controlsTimer = setTimeout(() => setControlsHidden(true), CONTROLS_HIDE_MS);
 }
 
 function hideControls() {
   clearTimeout(controlsTimer);
-  $('controls').hidden = true;
+  setControlsHidden(true);
 }
 
-// 재생 중에는 주소창 없이 화면 가득 보여 준다. 터치 처리 중에(첫 await 전에) 불러야 한다.
+// 전체 화면은 더블클릭(휴대폰은 두 번 탭)으로만 켜고 끈다.
+// 자동으로 켜면 크롬이 '전체 화면을 종료하려면…' 안내를 띄우는데, 웹 페이지에서는 그 안내를 끌 수 없다.
 function enterFullscreen() {
   if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
@@ -261,7 +274,6 @@ function exitFullscreen() {
 
 async function startPlayback(item, settings) {
   if (starting) return;
-  enterFullscreen();
   starting = true;
   try {
     await startPlaybackOnce(item, settings);
@@ -298,6 +310,7 @@ async function startPlaybackOnce(item, settings) {
   $('audio-title').hidden = item.kind === 'video';
   $('audio-title').textContent = item.name;
   hideControls();
+  updateProgress(0, player.position().duration);
   go('player');
 
   const step = counter.start();
@@ -383,9 +396,13 @@ function bindEvents() {
 
   $('screen-player').addEventListener('click', (e) => {
     if (e.target.closest('#controls')) return;
-    enterFullscreen(); // 화면을 껐다 켜서 전체 화면이 풀렸으면 다시 들어간다.
     if ($('controls').hidden) showControls();
     else hideControls();
+  });
+  $('screen-player').addEventListener('dblclick', (e) => {
+    if (e.target.closest('#controls')) return;
+    if (document.fullscreenElement) exitFullscreen();
+    else enterFullscreen();
   });
   $('pause-btn').addEventListener('click', () => {
     if (!session) return;
@@ -408,7 +425,12 @@ function bindEvents() {
     }
     showScreen('library');
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateBadge(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !session) return;
+    updateBadge();
+    const { current, duration } = player.position();
+    updateProgress(current, duration);
+  });
 }
 
 async function init() {
@@ -421,6 +443,7 @@ async function init() {
   player.onEnded(onTrackEnded);
   player.onPlayingChange(onPlayingChange);
   player.onError(onPlaybackError);
+  player.onTimeUpdate(updateProgress);
   bindEvents();
   $('desktop-notice').hidden = !looksLikeDesktopMode({
     innerWidth: window.innerWidth,

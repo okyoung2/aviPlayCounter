@@ -24,6 +24,7 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   let endedCb = null;
   let errorCb = null;
   let playingCb = null;
+  let timeCb = null;
   let wakeLock = null;
   let syncTimer = null;
 
@@ -75,6 +76,12 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   });
   audio.addEventListener('seeked', syncVideo);
+  // 진행바용 재생 위치. 화면이 꺼져 있으면 그릴 필요가 없다.
+  for (const type of ['timeupdate', 'durationchange', 'seeked']) {
+    audio.addEventListener(type, () => {
+      if (active && !document.hidden) timeCb?.(audio.currentTime, audio.duration);
+    });
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !active) return;
     syncVideo();
@@ -167,6 +174,11 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
     onEnded(cb) { endedCb = cb; },
     onPlayingChange(cb) { playingCb = cb; },
     onError(cb) { errorCb = cb; },
+    onTimeUpdate(cb) { timeCb = cb; },
+
+    position() {
+      return { current: audio.currentTime, duration: audio.duration };
+    },
 
     playAlert(which) {
       const el = alerts[which];
