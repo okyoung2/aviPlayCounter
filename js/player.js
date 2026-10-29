@@ -17,6 +17,13 @@ function makeAlert(src, which) {
   return el;
 }
 
+// 아이폰 사파리는 페이지에서 볼륨을 바꿀 수 없다(volume 값을 넣어도 1 로 남는다).
+function canSetVolume() {
+  const probe = new Audio();
+  probe.volume = 0.5;
+  return probe.volume === 0.5;
+}
+
 export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
   const alerts = { last: makeAlert(lastAlertSrc, 'last'), done: makeAlert(doneAlertSrc, 'done') };
   let kind = 'audio';
@@ -198,6 +205,15 @@ export function createPlayer({ audio, video, lastAlertSrc, doneAlertSrc }) {
 
     position() {
       return { current: audio.currentTime, duration: audio.duration };
+    },
+
+    supportsVolume: canSetVolume(),
+
+    // 만트라 소리와 알림음에 함께 적용한다.
+    setVolume(v) {
+      const level = Math.min(1, Math.max(0, v));
+      audio.volume = level;
+      for (const el of Object.values(alerts)) el.volume = level;
     },
 
     playAlert(which) {

@@ -82,6 +82,7 @@ export function createMemoryStore() {
   const items = new Map();
   const blobs = new Map();
   let lastUsed = null;
+  let volume = null;
   return {
     async listItems() { return [...items.values()].map((it) => ({ ...it })); },
     addFiles: serialized((files) =>
@@ -104,6 +105,8 @@ export function createMemoryStore() {
     },
     async getLastUsed() { return lastUsed; },
     async setLastUsed(settings) { lastUsed = settings; },
+    async getVolume() { return volume; },
+    async setVolume(v) { volume = v; },
     close() {},
   };
 }
@@ -169,6 +172,17 @@ export async function openStore(dbName = 'mantra-player') {
     async setLastUsed(settings) {
       const tx = db.transaction('meta', 'readwrite');
       tx.objectStore('meta').put(settings, 'lastUsed');
+      await txDone(tx);
+    },
+
+    // 0~1. 저장한 적이 없으면 null.
+    async getVolume() {
+      return (await get('meta', 'volume')) ?? null;
+    },
+
+    async setVolume(v) {
+      const tx = db.transaction('meta', 'readwrite');
+      tx.objectStore('meta').put(v, 'volume');
       await txDone(tx);
     },
 

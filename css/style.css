@@ -159,9 +159,18 @@ h3 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 24px 0 8px;
 .controls {
   position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  display: flex; gap: 12px;
+  display: flex; flex-direction: column; gap: 12px;
 }
+.control-buttons { display: flex; gap: 12px; }
 .controls button { min-width: 130px; min-height: 60px; font-size: 18px; }
+.volume {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 48px; padding: 0 14px;
+  background: rgba(0, 0, 0, 0.6); color: #fff;
+  border-radius: 12px;
+}
+.volume input { flex: 1; min-width: 0; height: 32px; accent-color: var(--accent); }
+.volume-value { min-width: 3ch; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; opacity: 0.85; }
 
 /* 결과 */
 .result { text-align: center; padding-top: 18vh; }

@@ -261,6 +261,14 @@ function hideControls() {
   setControlsHidden(true);
 }
 
+// 볼륨은 0~100 으로 다루고 player 에는 0~1 로 넘긴다.
+function applyVolume(percent) {
+  player.setVolume(percent / 100);
+  $('volume').value = percent;
+  $('volume-value').textContent = percent;
+  $('volume-icon').textContent = percent === 0 ? '🔇' : '🔊';
+}
+
 // 전체 화면은 더블클릭(휴대폰은 두 번 탭)으로만 켜고 끈다.
 // 자동으로 켜면 크롬이 '전체 화면을 종료하려면…' 안내를 띄우는데, 웹 페이지에서는 그 안내를 끌 수 없다.
 function enterFullscreen() {
@@ -413,6 +421,13 @@ function bindEvents() {
     else player.play().catch(() => {});
   });
   $('stop-btn').addEventListener('click', () => { if (session) finish(false); });
+  $('volume').addEventListener('input', (e) => {
+    applyVolume(Number(e.target.value));
+    showControls(); // 조절하는 동안 버튼이 사라지지 않게 한다.
+  });
+  $('volume').addEventListener('change', (e) => {
+    store.setVolume(Number(e.target.value) / 100).catch(() => {});
+  });
   $('again-btn').addEventListener('click', () => {
     if (lastSession) startPlayback(lastSession.item, lastSession.settings);
   });
@@ -460,6 +475,11 @@ async function init() {
     $('temp-notice').hidden = false;
   }
   lastUsed = await store.getLastUsed().catch(() => null);
+  if (player.supportsVolume) {
+    $('volume-row').hidden = false;
+    const saved = await store.getVolume().catch(() => null);
+    applyVolume(saved === null ? 100 : Math.round(saved * 100));
+  }
   await refreshLibrary();
   showScreen('library');
 }
